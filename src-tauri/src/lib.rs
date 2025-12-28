@@ -1,11 +1,17 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+use tauri::image::Image;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, SubmenuBuilder};
-use tauri::{Emitter};
+use tauri::{Emitter, Manager};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn get_window_count(app: tauri::AppHandle) -> usize {
+    app.webview_windows().len()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -35,6 +41,8 @@ pub fn run() {
             let custom_theme = CheckMenuItemBuilder::new("Custom Colors")
                     .checked(false)
                     .build(app)?;
+
+            let app_icon = Image::from_bytes(include_bytes!("../icons/icon.png")).unwrap();
                 
             let icon_menu = SubmenuBuilder::new(app, "WIDEPad")
                 .text("new_window", "New Window")
@@ -142,6 +150,8 @@ pub fn run() {
 
             app.set_menu(main_menu)?;
 
+            icon_menu.set_icon(Some(app_icon))?;
+
             app.on_menu_event(move |app_handle, event| {
                 match event.id().0.as_str() {
                     "light" | "dark" | "whitespace" | "void" | "star" => {
@@ -155,6 +165,9 @@ pub fn run() {
                         };
                     }
                     "side-panel" | "file-details" | "font-selection" | "font-color" | "zoom" => app_handle.emit("view", event.id().0.as_str().to_string()).expect("Viewmode failed"),
+                    "github_feedback" => app_handle.emit("help", event.id().0.as_str().to_string()).expect("Viewmode failed"),
+                    "new_window" | "close_window" | "restart" => app_handle.emit("icon", event.id().0.as_str().to_string()).expect("Failed to close window"),
+                    "quit" => app_handle.exit(0),
                     // "transparent" => app_handle.emit("themes:transparent", {}).expect("Theme failed to load"),
                     _ => {}
                 }
@@ -163,7 +176,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![greet, get_window_count])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

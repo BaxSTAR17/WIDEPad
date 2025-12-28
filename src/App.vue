@@ -1,11 +1,14 @@
 <script setup lang="ts">
   import { onMounted } from "vue";
 
-  //import { invoke } from "@tauri-apps/api/core";
-
+  import { invoke } from "@tauri-apps/api/core";
   import { Theme, Dark, Light, Whitespace, Void, Star } from "./themes.ts";
   import { listen } from "@tauri-apps/api/event";
-    import { View } from "./viewmode.ts";
+  import { View } from "./viewmode.ts";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { getCurrentWebviewWindow, WebviewWindow } from "@tauri-apps/api/webviewWindow";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+import { relaunch } from "@tauri-apps/plugin-process";
 
   let main_theme: Theme = Dark;
   let main_view: View = {
@@ -88,6 +91,40 @@
             break;
     }
   }
+
+  async function fetch_help(destination: string) {
+    switch(destination) {
+        case "github_feedback":
+            await openUrl("https://github.com/BaxSTAR17/WIDEPad/issues");
+            break;
+        default:
+            break;
+    }
+  }
+
+  async function control_window(control: string) {
+    switch(control) {
+        case "new_window":
+            const window_count = await invoke('get_window_count');
+            const window_label = `WIDEPad_${window_count}`;
+            const new_window = new WebviewWindow(window_label, {
+                url: 'index.html',
+                title: window_label,
+                maximized: true,
+            });
+            new_window.once('tauri://webview-created', () => { console.log(`${window_label} has successfully launched`); });
+            new_window.once('tauri://webview-error', (e) => { console.error(`ERROR MAKING WINDOW: `, e); });
+            break;
+        case "close_window":
+            getCurrentWebviewWindow().close();
+            break;
+        case "restart":
+            await relaunch();
+            break;
+        default:
+            break;
+    } 
+  }
   
 //   function enable_transparency() {
 //     if(!transparancy) {
@@ -116,8 +153,18 @@
   onMounted(async () => {
     update_theme(main_theme);
 
-    listen("themes", (event) => { change_theme(event.payload as string) });
-    listen("view", (event) => { update_view(event.payload as string) });
+    if(getCurrentWindow().label == "WIDEPad") {
+        listen("themes", (event) => { change_theme(event.payload as string) });
+        listen("view", (event) => { update_view(event.payload as string) });
+        listen("help", (event) => { fetch_help(event.payload as string) });
+        listen("icon", (event) => { control_window(event.payload as string) });
+    } else {
+        let window = getCurrentWebviewWindow();
+        window.listen("themes", (event) => { change_theme(event.payload as string) });
+        window.listen("view", (event) => { update_view(event.payload as string) });
+        window.listen("help", (event) => { fetch_help(event.payload as string) });
+        window.listen("icon", (event) => { control_window(event.payload as string) });
+    }
     // listen("themes:transparent", enable_transparency)
   });
 
